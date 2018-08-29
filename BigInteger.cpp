@@ -28,8 +28,6 @@ class BigInteger {
         return A+B ;
     }
 
-
-
     static BigIntegerNode* _Append(BigInteger &X)
     {
         BigIntegerNode* NextStructure = new BigIntegerNode ;
@@ -52,12 +50,30 @@ class BigInteger {
         return NextStructure ;
     }
 
+    // Make a copy of X.
+    static BigInteger copy(BigInteger const& X)
+    {
+      BigInteger Z ;
+      BigIntegerNode* XcurrentNode = X._HEAD ;
+      BigIntegerNode* ZcurrentNode ;
+      for(int i=0;i<X._size;i++)
+      {
+        ZcurrentNode = _Append(Z) ;
+        for(int j=0;j<__INTEGER_ARRAY_SIZE__;j++)
+        {
+              ZcurrentNode->Integer_Array[j] = XcurrentNode->Integer_Array[j] ;
+        } // end of loop j.
+        XcurrentNode = XcurrentNode->NextStructure ;
+      } // end of loop i.
+      return Z ;
+    }
+
     static void extend(BigInteger& X, uint32_t nb_elmt_to_add)
     {
         for(int i=0;i<nb_elmt_to_add;i++)
         {
           _Append(X) ;
-        }
+        } // end of loop i.
     }
 
   //public:
@@ -68,7 +84,7 @@ class BigInteger {
       _TAIL = NULL ;
     }
 
-    ~BigInteger()
+    void deallocate()
     {
       BigIntegerNode* currentNode = this->_HEAD ;
       BigIntegerNode* nextNode = NULL ;
@@ -79,6 +95,16 @@ class BigInteger {
         currentNode = nextNode ;
       }
     } // destructor.
+
+    BigInteger operator=(BigInteger const& X)
+    {
+      if (this != &X) // do nothing in case of self assignement.
+      {
+        this->deallocate() ;
+        //*this = copy(X) ;
+        return *this ;
+      }
+    }
 
     uint32_t get_size()
     {
@@ -97,11 +123,11 @@ class BigInteger {
         cout << "|" ;
       } // end loop i.
       cout << "\n" ;
-    } // end print
+    } // end print.
 
-    static BigInteger* add(BigInteger const& X, BigInteger const& Y)
+    static BigInteger add(BigInteger const& X, BigInteger const& Y)
     {
-      BigInteger* Z = new BigInteger() ;
+      BigInteger Z ;
       BigIntegerNode* currentNode = NULL ;
       BigIntegerNode* currentNodeX ;
       BigIntegerNode* currentNodeY ;
@@ -114,7 +140,7 @@ class BigInteger {
       uint8_t tmp_carry = 0 ;
       for(int i=0;i<ySize;i++)
       {
-        currentNode = _Append(*Z) ;
+        currentNode = _Append(Z) ;
         for (int j=0;j<__INTEGER_ARRAY_SIZE__;j++)
         {
             uint32_t valX = currentNodeX->Integer_Array[j] ;
@@ -122,7 +148,6 @@ class BigInteger {
             uint32_t valZ = _Safe_uint_Addition(valX, carry, tmp_carry) ;
             valZ = _Safe_uint_Addition(valZ, valY, carry) ;
             carry = carry | tmp_carry ;
-            cout << "carry = " << int(valZ) << endl ;
             currentNode->Integer_Array[j] = valZ ;
         } // end loop j.
         currentNodeX = currentNodeX->NextStructure ;
@@ -131,7 +156,7 @@ class BigInteger {
       // X Remaining Part.
       for(int i=0;i<xSize-ySize;i++)
       {
-        currentNode = _Append(*Z) ;
+        currentNode = _Append(Z) ;
         for(int j=0;j<__INTEGER_ARRAY_SIZE__;j++)
         {
             uint32_t valX = currentNodeX->Integer_Array[j] ;
@@ -142,29 +167,28 @@ class BigInteger {
         currentNodeX = currentNodeX->NextStructure ;
       } // end loop i.
       // If carry is set, then add an additionnal block.
-      cout << currentNode << endl ;
       if (carry)
       {
-        currentNode = _Append(*Z) ;
+        currentNode = _Append(Z) ;
         currentNode->Integer_Array[0] = 1 ;
       }
       return Z ;
     } // end add function.
 
 
-    static BigInteger* mul_BI_uint(BigInteger const& X, uint32_t A)
+    static BigInteger mul_BI_uint(BigInteger const& X, uint32_t A)
     {
-      BigInteger* Z = new BigInteger ;
+      BigInteger Z ;
       uint32_t A_MSB = A >> 16 ;
       uint32_t A_LSB = A & 0xFFFF ;
       uint32_t carry = 0 ;
       uint8_t tmp_carry_0 = 0 ;
       uint8_t tmp_carry_1 = 0 ;
       BigIntegerNode* XcurrentNode = X._HEAD ;
-      BigIntegerNode* ZcurrentNode = Z->_HEAD ;
+      BigIntegerNode* ZcurrentNode ;
       for(int i=0;i<X._size;i++)
       {
-        ZcurrentNode = _Append(*Z) ;
+        ZcurrentNode = _Append(Z) ;
         for(int j=0;j<__INTEGER_ARRAY_SIZE__;j++)
         {
           uint32_t currentX = XcurrentNode->Integer_Array[j] ;
@@ -186,11 +210,52 @@ class BigInteger {
       } // end loop i.
       if (carry)
       {
-        ZcurrentNode = _Append(*Z) ;
+        ZcurrentNode = _Append(Z) ;
         ZcurrentNode->Integer_Array[0] = carry ;
       }
       return Z ;
-    }
+    } // end of mul_BI_uint.
+
+    // 32-bit shift of BigInteger (pushing 0 to LSB).
+    void shift()
+    {
+      BigInteger Z ;
+      BigIntegerNode* XcurrentNode = this->_HEAD ;
+      uint32_t val = 0 ;
+      uint32_t old_val = 0 ;
+      for(int i=0;i<this->_size;i++)
+      {
+        for(int j=0;j<__INTEGER_ARRAY_SIZE__;j++)
+        {
+          val = XcurrentNode->Integer_Array[j] ;
+          XcurrentNode->Integer_Array[j] = old_val ;
+          old_val = val ;
+        } // end of j loop.
+        XcurrentNode = XcurrentNode->NextStructure ;
+      } // end of i loop.
+      XcurrentNode = _Append(*this) ;
+      XcurrentNode->Integer_Array[0] = old_val ;
+    } // end of shift function.
+
+      // School Book Method (note that inner multiplications use the Karatsuba's Trick).
+    static BigInteger mul(BigInteger const& X, BigInteger const& Y)
+    {
+      BigInteger Z ;
+      BigInteger CopyX = copy(X) ;
+      BigInteger tmpZ ;
+      BigIntegerNode* YcurrentNode = Y._HEAD ;
+      for(int i=0;i<Y._size;i++)
+      {
+        for(int j=0;j<__INTEGER_ARRAY_SIZE__;j++)
+        {
+          tmpZ = mul_BI_uint(CopyX, YcurrentNode->Integer_Array[j]) ;
+          CopyX.shift() ;
+        } // fin boucle j.
+        YcurrentNode = YcurrentNode->NextStructure ;
+      } // fin boucle i.
+
+
+    } // end of mul function.
 
 } ; // end BigInteger Class ;
 
@@ -200,15 +265,26 @@ int main()
     BigInteger A ;
     BigInteger::_Append(A) ;
     A._HEAD->Integer_Array[0] = 4294967295 ;
-    A._HEAD->Integer_Array[1] = 4294967295 ;
+    A._HEAD->Integer_Array[1] = 5577 ;
+    A.shift() ;
     BigInteger B ;
     BigInteger::_Append(B) ;
-    B._HEAD->Integer_Array[0] = 57845 ;
-    BigInteger* C ;
-    C = BigInteger::mul_BI_uint(A, 57845) ;
+    B._HEAD->Integer_Array[0] = 1 ;
+    BigInteger C ;
+    BigInteger D ;
+    BigInteger E ;
+    C = BigInteger::mul_BI_uint(A, 789) ;
+    D = BigInteger::add(A, B) ;
     //BigInteger::extend(A,5) ;
     BigInteger::print(A) ;
-    BigInteger::print(*C) ;
-    delete C ;
+    BigInteger::print(C) ;
+
+    A.deallocate() ;
+    B.deallocate() ;
+    C.deallocate() ;
+    D.deallocate() ;
+
+
+
     return 0 ;
 }
